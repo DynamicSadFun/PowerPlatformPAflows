@@ -1,0 +1,636 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_excelonlinebusiness": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "new_sharedexcelonlinebusiness_3e4ec"
+        },
+        "api": {
+          "name": "shared_excelonlinebusiness"
+        }
+      },
+      "shared_sharepointonline": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "new_sharedsharepointonline_87ad0"
+        },
+        "api": {
+          "name": "shared_sharepointonline"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "a77c343e-34c7-470d-bd8a-0f3d251c5397"
+          },
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "triggerAuthenticationType": "All"
+          }
+        }
+      },
+      "actions": {
+        "Initialize_ReleaseId": {
+          "runAfter": {
+            "Initialize_definitionEnvironmentId": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "783daeec-0648-4221-b49f-02fc61596658"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "ReleaseId",
+                "type": "integer",
+                "value": "@triggerBody()['resource']['environment']['releaseId']"
+              }
+            ]
+          }
+        },
+        "Initialize_ArtifactName": {
+          "runAfter": {
+            "Initialize_PreviousReleaseId": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "293ac40c-17ed-4773-b816-d749b3dd80b0"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "Artifact",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Apply_to_each": {
+          "foreach": "@body('Filter_array')",
+          "actions": {
+            "Set_ArtifactName": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "3a73342c-86a8-486e-91d0-55db6be4aefd"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "Artifact",
+                "value": "@{item()?['alias']}"
+              }
+            },
+            "Retrieve-WorkItems": {
+              "runAfter": {
+                "Set_ArtifactName": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "0885bdae-2888-4ad7-b325-0a129ecc35eb"
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "https://vsrm.dev.azure.com/{organization}/{project}/_apis/Release/releases/@{variables('ReleaseId')}/workitems?baseReleaseId=@{variables('PreviousReleaseId')}&artifactAlias=@{variables('Artifact')}",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "Basic ADO-Token-Base64"
+                }
+              }
+            },
+            "Condition": {
+              "actions": {
+                "Apply_to_each_item": {
+                  "foreach": "@outputs('Retrieve-WorkItems')?['body']['value']",
+                  "actions": {
+                    "Append_to_array_variable": {
+                      "runAfter": {},
+                      "metadata": {
+                        "operationMetadataId": "284611bc-85a1-4b89-b7f1-ac046d511684"
+                      },
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "workItems",
+                        "value": "@item()?['url']"
+                      }
+                    }
+                  },
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "49dc6c80-ed71-45b3-acd1-0c1ddfa732b2"
+                  },
+                  "type": "Foreach"
+                }
+              },
+              "runAfter": {
+                "Retrieve-WorkItems": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "greater": [
+                  "@outputs('Retrieve-WorkItems')?['body']['count']",
+                  0
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "83008197-fdda-4d05-8184-6a1d2bd9bce4"
+              },
+              "type": "If"
+            }
+          },
+          "runAfter": {
+            "Filter_array": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "314177b2-47ef-4460-af46-8e6defa0ca87"
+          },
+          "type": "Foreach"
+        },
+        "Initialize_DefinitionId": {
+          "runAfter": {
+            "Initialize_releaseDateTime": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "ba7e2eef-7882-4e45-a3b6-44b81ece7b09"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "DefinitionId",
+                "type": "integer",
+                "value": "@triggerBody()['resource']['environment']['releaseDefinition']['id']"
+              }
+            ]
+          }
+        },
+        "HTTP": {
+          "runAfter": {
+            "Initialize_environmentName": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "01ead63e-bddb-4b06-837c-824194efcecd"
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "GET",
+            "uri": "https://vsrm.dev.azure.com/{organization}/{project}/_apis/release/deployments?definitionId=@{variables('DefinitionId')}&deploymentStatus=succeeded&definitionEnvironmentId=@{variables('definitionEnvironmentId')}&$top=2",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic ADO-Token-Base64"
+            }
+          }
+        },
+        "Initialize_PreviousReleaseId": {
+          "runAfter": {
+            "HTTP": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "2de7351d-4302-4e4e-b399-f6757ceda462"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "PreviousReleaseId",
+                "type": "integer",
+                "value": "@outputs('HTTP')?['body']['value'][1]['release']['id']"
+              }
+            ]
+          }
+        },
+        "Initialize_definitionEnvironmentId": {
+          "runAfter": {
+            "Initialize_DefinitionId": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "35da6717-c5c0-4820-8105-d80daa42391a"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "definitionEnvironmentId",
+                "type": "integer",
+                "value": "@triggerBody()['resource']['environment']['definitionEnvironmentId']"
+              }
+            ]
+          }
+        },
+        "Initialize_workItems": {
+          "runAfter": {
+            "Initialize_ArtifactName": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "4f83017f-3009-4ea1-b6cc-ba1ccb20b0c7"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "workItems",
+                "type": "array"
+              }
+            ]
+          }
+        },
+        "Compose_(for_remove_duplicates_from_workItem_array)": {
+          "runAfter": {
+            "Apply_to_each": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "c22be2ed-309e-445f-9a84-00c06e4f27b3"
+          },
+          "type": "Compose",
+          "inputs": "@union(variables('workItems'),variables('workItems'))"
+        },
+        "Set_workItems_(non-duplicates)": {
+          "runAfter": {
+            "Compose_(for_remove_duplicates_from_workItem_array)": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "6e92943e-6c70-4369-894d-f41f7acf189f"
+          },
+          "type": "SetVariable",
+          "inputs": {
+            "name": "workItems",
+            "value": "@outputs('Compose_(for_remove_duplicates_from_workItem_array)')"
+          }
+        },
+        "Loop_By_WorkItems": {
+          "foreach": "@variables('workItems')",
+          "actions": {
+            "Add_a_row_into_a_table": {
+              "runAfter": {
+                "Compose": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "9ae571d5-ce67-41dd-937d-36812bb94ee8",
+                "tableId": "Releases"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_excelonlinebusiness",
+                  "operationId": "AddRowV2",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_excelonlinebusiness"
+                },
+                "parameters": {
+                  "source": "groups/a4847a5e-cacd-4565-a7c0-a4a021fe448c",
+                  "drive": "b!eDUXqsO0W0CgTq9KakJwggpxiksT2TFNj9fn0oXlflAyHbIhwZBKRIsGYHJF8cW7",
+                  "file": "/Release Notes/@{variables('FileName')}",
+                  "table": "Releases",
+                  "item": "@outputs('Compose')"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Compose": {
+              "runAfter": {
+                "HTTP_WorkItem": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "99d6750a-9ec1-46f5-b0b9-6fbeb411a6a1"
+              },
+              "type": "Compose",
+              "inputs": {
+                "Task Link": "@{concat('https://dev.azure.com/{organization}/{project}/_workitems/edit/', body('HTTP_WorkItem')['id'])}",
+                "ID": "@{body('HTTP_WorkItem')['id']}",
+                "Type": "@{body('HTTP_WorkItem')['fields']['System.WorkItemType']}",
+                "Title": "@{body('HTTP_WorkItem')['fields']['System.Title']}",
+                "Task Tags": "@{coalesce(body('HTTP_WorkItem')?['fields']?['System.Tags'], '')}",
+                "Sprint": "@{body('HTTP_WorkItem')['fields']['System.IterationPath']}",
+                "Team": "@{body('HTTP_WorkItem')['fields']['System.AreaPath']}",
+                "Deployed": "@{variables('releaseDateTime')}",
+                "Environment": "@{variables('environmentName')}",
+                "Release Notes": "@{outputs('HTTP_WorkItem')?['body']?['fields']?['Custom.ReleaseNotes']}",
+                "Release-Stage": "@variables('releaseStage')"
+              }
+            },
+            "HTTP_WorkItem": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "c70295bf-9f7c-4a0a-90ba-627b437cf2ef"
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "@{items('Loop_By_WorkItems')}",
+                "headers": {
+                  "Authorization": "Basic ADO-Token-Base64",
+                  "Content-Type": "application/json"
+                }
+              }
+            }
+          },
+          "runAfter": {
+            "Condition_For_Sharepoint_File": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "be7d1ab9-4633-4e52-8313-0734964e5508"
+          },
+          "type": "Foreach"
+        },
+        "Initialize_workItemsResult": {
+          "runAfter": {
+            "Set_workItems_(non-duplicates)": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "eeb76893-24b1-4a56-b7f4-c0b7d46ffc54"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "workItemsResult",
+                "type": "array"
+              }
+            ]
+          }
+        },
+        "Initialize_releaseDateTime": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "a200f416-0d0b-45f5-b501-d65b89be30ac"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "releaseDateTime",
+                "type": "string",
+                "value": "@{formatDateTime(convertFromUtc(utcNow(), 'W. Europe Standard Time'), 'dd/MM/yyyy HH:mm')}"
+              }
+            ]
+          }
+        },
+        "Initialize_releaseStage": {
+          "runAfter": {
+            "Initialize_Tags": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "e5fe30c2-b8db-4402-bd4a-d788ca112959"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "releaseStage",
+                "type": "string",
+                "value": "@{triggerBody()['resource']['environment']['preDeployApprovals'][0]['releaseDefinition']['name']} - @{triggerBody()['resource']['environment']['preDeployApprovals'][0]['releaseEnvironment']['name']}"
+              }
+            ]
+          }
+        },
+        "Filter_array": {
+          "runAfter": {
+            "Initialize_workItems": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "165078f6-6fea-44b8-ba9a-34c4e4ed4fa0"
+          },
+          "type": "Query",
+          "inputs": {
+            "from": "@triggerBody()?['resource']?['environment']?['deployPhasesSnapshot'][0]?['deploymentInput']?['artifactsDownloadInput']?['downloadInputs']",
+            "where": "@not(equals(item()?['artifactDownloadMode'], 'Skip'))"
+          }
+        },
+        "Initialize_environmentName": {
+          "runAfter": {
+            "Initialize_releaseStage": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "906c5884-dd1e-417e-8ffe-2e89c774b60d"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "environmentName",
+                "type": "string",
+                "value": "@{if(contains(toLower(triggerBody()['resource']['environment']['preDeployApprovals'][0]['releaseEnvironment']['name']), 'uat2'), 'UAT-2',\r\n  if(contains(toLower(triggerBody()['resource']['environment']['preDeployApprovals'][0]['releaseEnvironment']['name']), 'uat'), 'UAT',\r\n    if(contains(toLower(triggerBody()['resource']['environment']['preDeployApprovals'][0]['releaseEnvironment']['name']), 'test'), 'TEST', 'PROD')))}"
+              }
+            ]
+          }
+        },
+        "HTTP_Get_Tags": {
+          "runAfter": {
+            "Initialize_ReleaseId": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "9c16a5fa-a13c-4cb0-89ed-32f618e6db68"
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "GET",
+            "uri": "https://vsrm.dev.azure.com/{organization}/{project}/_apis/Release/releases/@{variables('ReleaseId')}/tags",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Basic ADO-Token-Base64"
+            }
+          }
+        },
+        "Initialize_Tags": {
+          "runAfter": {
+            "HTTP_Get_Tags": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "c61fb5f2-bf15-41a6-88e9-0284483b46c9"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "Tags",
+                "type": "string",
+                "value": "@{outputs('HTTP_Get_Tags')?['body']?['value'][0]}"
+              }
+            ]
+          }
+        },
+        "Initialize_FileName": {
+          "runAfter": {
+            "Initialize_workItemsResult": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "7a90cd95-6291-4a51-91de-04760bb42307"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "FileName",
+                "type": "string",
+                "value": "@{concat('Release Notes (', variables('Tags'), ').xlsx')}"
+              }
+            ]
+          }
+        },
+        "Get_files_(properties_only)": {
+          "runAfter": {
+            "Initialize_FileName": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "85ab927c-85fc-4b38-bdcd-f0e60224b768"
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_sharepointonline",
+              "operationId": "GetFileItems",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline"
+            },
+            "parameters": {
+              "dataset": "https://{org}.sharepoint.com/sites/",
+              "table": "21b21d32-90c1-444a-8b06-607245f1c5bb",
+              "folderPath": "/Shared Documents/Release Notes/",
+              "viewScopeOption": "Default",
+              "$filter": "FileLeafRef eq '@{variables('FileName')}'",
+              "$top": 1
+            },
+            "authentication": "@parameters('$authentication')"
+          },
+          "runtimeConfiguration": {
+            "paginationPolicy": {
+              "minimumItemCount": 50000
+            }
+          }
+        },
+        "Condition_For_Sharepoint_File": {
+          "actions": {},
+          "runAfter": {
+            "Get_files_(properties_only)": [
+              "Succeeded"
+            ]
+          },
+          "else": {
+            "actions": {
+              "Get_file_content": {
+                "runAfter": {},
+                "metadata": {
+                  "%252fShared%2bDocuments%252fRelease%252fRelease%2bNotes%2b(template).xlsx": "/Shared Documents/Release Notes/Release Notes (template).xlsx",
+                  "operationMetadataId": "8be2adcf-59e4-4ae8-b737-f770435c19c0"
+                },
+                "type": "OpenApiConnection",
+                "inputs": {
+                  "host": {
+                    "connectionName": "shared_sharepointonline",
+                    "operationId": "GetFileContent",
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline"
+                  },
+                  "parameters": {
+                    "dataset": "https://{org}.sharepoint.com/sites/",
+                    "id": "%252fShared%2bDocuments%252fRelease%252fRelease%2bNotes%2b(template).xlsx",
+                    "inferContentType": true
+                  },
+                  "authentication": "@parameters('$authentication')"
+                }
+              },
+              "Create_file": {
+                "runAfter": {
+                  "Get_file_content": [
+                    "Succeeded"
+                  ]
+                },
+                "metadata": {
+                  "operationMetadataId": "757a2faa-3114-4659-9546-c28ed8d3d2ad"
+                },
+                "type": "OpenApiConnection",
+                "inputs": {
+                  "host": {
+                    "connectionName": "shared_sharepointonline",
+                    "operationId": "CreateFile",
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline"
+                  },
+                  "parameters": {
+                    "dataset": "https://{org}.sharepoint.com/sites/",
+                    "folderPath": "/Shared Documents/Release Notes/",
+                    "name": "@variables('FileName')",
+                    "body": "@body('Get_file_content')"
+                  },
+                  "authentication": "@parameters('$authentication')"
+                },
+                "runtimeConfiguration": {
+                  "contentTransfer": {
+                    "transferMode": "Chunked"
+                  }
+                }
+              }
+            }
+          },
+          "expression": {
+            "greater": [
+              "@length(outputs('Get_files_(properties_only)')?['body/value'])",
+              0
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "b1e5488b-3570-4728-9ad1-0d3b2281c462"
+          },
+          "type": "If"
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}
